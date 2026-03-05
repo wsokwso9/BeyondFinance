@@ -120,3 +120,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
     error BFIN_DepositCapExceeded();
     error BFIN_InsufficientShares();
     error BFIN_InvalidFeeBps();
+    error BFIN_TransferFailed();
+    error BFIN_MaxVaults();
+    error BFIN_MaxCreditLines();
+    error BFIN_CreditLineNotFound();
+    error BFIN_NotBorrower();
+    error BFIN_LineFrozen();
+    error BFIN_LimitExceeded();
+    error BFIN_Reentrancy();
+    error BFIN_NotGuardian();
+    error BFIN_NotRiskCouncil();
+    error BFIN_ArrayLengthMismatch();
+    error BFIN_BatchTooLarge();
+    error BFIN_InvalidRate();
+    error BFIN_TooManyTags();
+    error BFIN_InvalidIndex();
+
+    // -------------------------------------------------------------------------
+    // CONSTANTS
+    // -------------------------------------------------------------------------
+
+    uint256 public constant BFIN_BPS_BASE = 10_000;
+    uint256 public constant BFIN_MAX_MANAGEMENT_FEE_BPS = 700;   // 7%
+    uint256 public constant BFIN_MAX_WITHDRAWAL_FEE_BPS = 350;   // 3.5%
+    uint256 public constant BFIN_MAX_PROTOCOL_FEE_BPS = 1500;    // 15%
+    uint256 public constant BFIN_MAX_RATE_BPS = 3_000;           // 30% simple APR
+    uint256 public constant BFIN_MAX_VAULTS = 72;
+    uint256 public constant BFIN_MAX_LINES = 128;
+    uint256 public constant BFIN_MAX_BATCH = 24;
+    bytes32 public constant BFIN_DOMAIN = keccak256("BeyondFinance.Core.v1");
+    uint256 public constant BFIN_DOMAIN_SALT = 0xC4A9E7B2D3F15489A602B1D7C8F0E36A952C47F1E3A8B5D6C0E49A7B3D5C29F7;
+
+    // -------------------------------------------------------------------------
+    // IMMUTABLES
+    // -------------------------------------------------------------------------
+
+    address public immutable treasury;
+    address public immutable riskCouncil;
+    address public immutable guardian;
+    uint256 public immutable deployedBlock;
+    bytes32 public immutable genesisHash;
+
+    // -------------------------------------------------------------------------
+    // STATE
+    // -------------------------------------------------------------------------
+
+    struct Vault {
+        address asset;
+        bytes32 nameHash;
+        bytes32 strategyHint;
+        uint256 totalAssets;
+        uint256 totalShares;
+        uint256 depositCap;
+        uint256 managementFeeBps;
+        uint256 withdrawalFeeBps;
+        uint256 lastAccrualBlock;
+        bool enabled;
+    }
+
+    struct CreditLine {
+        address borrower;
+        address asset;
