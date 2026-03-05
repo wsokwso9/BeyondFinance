@@ -181,3 +181,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
     struct CreditLine {
         address borrower;
         address asset;
+        uint256 limit;
+        uint256 rateBps;
+        uint256 borrowed;
+        uint256 lastAccrualBlock;
+        bool frozen;
+    }
+
+    struct VaultView {
+        uint256 vaultId;
+        address asset;
+        uint256 totalAssets;
+        uint256 totalShares;
+        uint256 depositCap;
+        uint256 managementFeeBps;
+        uint256 withdrawalFeeBps;
+        uint256 lastAccrualBlock;
+        bool enabled;
+        bytes32 nameHash;
+        bytes32 strategyHint;
+    }
+
+    struct CreditLineView {
+        uint256 lineId;
+        address borrower;
+        address asset;
+        uint256 limit;
+        uint256 rateBps;
+        uint256 borrowed;
+        uint256 lastAccrualBlock;
+        bool frozen;
+    }
+
+    // vaultId => Vault
+    mapping(uint256 => Vault) public vaults;
+    // vaultId => user => shares
+    mapping(uint256 => mapping(address => uint256)) public vaultShares;
+    // lineId => CreditLine
+    mapping(uint256 => CreditLine) public creditLines;
+    // user => tags
+    mapping(address => bytes32) public userTagsHash;
+
+    uint256[] private _vaultIds;
+    uint256[] private _lineIds;
+    uint256 public vaultCounter;
+    uint256 public lineCounter;
+    uint256 public protocolFeeBps;
+    uint256 public protocolFeeAssets; // accumulated fees in native accounting units (sum across vaults/assets, conceptual)
+
+    // -------------------------------------------------------------------------
+    // MODIFIERS
+    // -------------------------------------------------------------------------
+
+    modifier onlyGuardian() {
+        if (msg.sender != guardian) revert BFIN_NotGuardian();
+        _;
+    }
+
+    modifier onlyRiskCouncil() {
+        if (msg.sender != riskCouncil) revert BFIN_NotRiskCouncil();
+        _;
+    }
