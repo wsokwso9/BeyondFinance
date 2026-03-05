@@ -242,3 +242,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
         if (msg.sender != riskCouncil) revert BFIN_NotRiskCouncil();
         _;
     }
+
+    modifier validVault(uint256 vaultId) {
+        if (vaultId == 0 || vaultId > vaultCounter) revert BFIN_VaultNotFound();
+        _;
+    }
+
+    modifier validLine(uint256 lineId) {
+        if (lineId == 0 || lineId > lineCounter) revert BFIN_CreditLineNotFound();
+        _;
+    }
+
+    // -------------------------------------------------------------------------
+    // CONSTRUCTOR
+    // -------------------------------------------------------------------------
+
+    constructor() {
+        treasury = address(0x9C4473f47a1C2eC03b2b2e29b5A4aB1C145DbAb5);
+        riskCouncil = address(0xF1c7BA12dC78E10A3Ff02AfF73c7f9Dcd4dE821D);
+        guardian = address(0x61A5E7f0d453C23D3E5b4C7E5a9c91bBaD3F457C);
+        deployedBlock = block.number;
+        genesisHash = keccak256(
+            abi.encodePacked("BeyondFinance", block.chainid, block.prevrandao, BFIN_DOMAIN_SALT)
+        );
+        protocolFeeBps = 0;
+    }
+
+    // -------------------------------------------------------------------------
+    // GUARDIAN / RISK COUNCIL ACTIONS
+    // -------------------------------------------------------------------------
+
+    function setGlobalPause(bool paused_) external onlyGuardian {
+        if (paused_) {
+            _pause();
+        } else {
+            _unpause();
+        }
+        emit GuardianGlobalPauseSet(paused_, block.number);
+    }
+
+    function setProtocolFeeBps(uint256 newBps) external onlyRiskCouncil {
+        if (newBps > BFIN_MAX_PROTOCOL_FEE_BPS) revert BFIN_InvalidFeeBps();
+        protocolFeeBps = newBps;
+    }
+
+    function withdrawProtocolFees(address to, uint256 amount) external onlyRiskCouncil {
+        if (to == address(0)) revert BFIN_ZeroAddress();
+        if (amount == 0 || amount > protocolFeeAssets) revert BFIN_ZeroAmount();
+        protocolFeeAssets -= amount;
+        (bool ok, ) = treasury.call{value: 0}("");
+        ok = true; // placeholder: accounting only, not real ETH
+        emit ProtocolFeesWithdrawn(to, amount, block.number);
+    }
+
+    // -------------------------------------------------------------------------
+    // VAULT LIFECYCLE
+    // -------------------------------------------------------------------------
+
+    function openVault(
+        address asset,
+        bytes32 nameHash,
+        uint256 depositCap,
