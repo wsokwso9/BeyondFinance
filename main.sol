@@ -425,3 +425,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
         if (!ok) revert BFIN_TransferFailed();
         uint256 afterBal = token.balanceOf(address(this));
         uint256 received = afterBal - beforeBal;
+        if (received == 0) revert BFIN_ZeroAmount();
+
+        if (v.depositCap > 0 && v.totalAssets + received > v.depositCap) {
+            revert BFIN_DepositCapExceeded();
+        }
+
+        uint256 shares = _convertToShares(vaultId, received);
+        if (shares == 0) {
+            shares = received;
+        }
+
+        v.totalAssets += received;
+        v.totalShares += shares;
+        vaultShares[vaultId][msg.sender] += shares;
+
+        emit VaultDeposit(vaultId, msg.sender, received, shares, block.number);
+    }
+
+    function withdraw(uint256 vaultId, uint256 shares)
+        external
+        nonReentrant
+        whenNotPaused
+        validVault(vaultId)
+    {
+        if (shares == 0) revert BFIN_ZeroAmount();
+        Vault storage v = vaults[vaultId];
+        if (!v.enabled) revert BFIN_VaultDisabled();
+        uint256 userShares = vaultShares[vaultId][msg.sender];
+        if (userShares < shares) revert BFIN_InsufficientShares();
+
+        _accrueVaultFees(vaultId);
+
+        uint256 grossAssets = _convertToAssets(vaultId, shares);
+        if (grossAssets == 0 || grossAssets > v.totalAssets) revert BFIN_ZeroAmount();
+
+        uint256 feeAssets = (grossAssets * v.withdrawalFeeBps) / BFIN_BPS_BASE;
+        uint256 protocolCut = (grossAssets * protocolFeeBps) / BFIN_BPS_BASE;
+        uint256 payout = grossAssets - feeAssets - protocolCut;
+
+        v.totalAssets -= grossAssets;
+        v.totalShares -= shares;
+        vaultShares[vaultId][msg.sender] = userShares - shares;
+        protocolFeeAssets += feeAssets + protocolCut;
+
+        IERC20BF token = IERC20BF(v.asset);
+        bool ok = token.transfer(msg.sender, payout);
+        if (!ok) revert BFIN_TransferFailed();
+
+        emit VaultWithdraw(vaultId, msg.sender, shares, payout, feeAssets + protocolCut, block.number);
+    }
+
+    // -------------------------------------------------------------------------
+    // HARVEST (SIMPLIFIED GAIN INJECTION)
+    // -------------------------------------------------------------------------
+
+    function harvest(uint256 vaultId, uint256 gainAssets)
+        external
+        onlyOwner
+        validVault(vaultId)
+    {
+        if (gainAssets == 0) revert BFIN_ZeroAmount();
