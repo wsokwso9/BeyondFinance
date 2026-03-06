@@ -730,3 +730,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
         Vault storage v = vaults[vaultId];
         return (v.totalAssets, v.totalShares);
     }
+
+    function getGlobalInfo()
+        external
+        view
+        returns (
+            address treasury_,
+            address riskCouncil_,
+            address guardian_,
+            uint256 protocolFeeBps_,
+            uint256 protocolFeeAssets_,
+            uint256 vaultCounter_,
+            uint256 lineCounter_,
+            bool paused_,
+            uint256 deployedBlock_,
+            bytes32 genesisHash_,
+            bytes32 domain_
+        )
+    {
+        return (
+            treasury,
+            riskCouncil,
+            guardian,
+            protocolFeeBps,
+            protocolFeeAssets,
+            vaultCounter,
+            lineCounter,
+            paused(),
+            deployedBlock,
+            genesisHash,
+            BFIN_DOMAIN
+        );
+    }
+
+    function getDomainSalt() external pure returns (uint256) {
+        return BFIN_DOMAIN_SALT;
+    }
+
+    function getBpsBase() external pure returns (uint256) {
+        return BFIN_BPS_BASE;
+    }
+
+    function getMaxVaults() external pure returns (uint256) {
+        return BFIN_MAX_VAULTS;
+    }
+
+    function getMaxLines() external pure returns (uint256) {
+        return BFIN_MAX_LINES;
+    }
+
+    function getMaxRateBps() external pure returns (uint256) {
+        return BFIN_MAX_RATE_BPS;
+    }
+
+    function platformDomain() external pure returns (bytes32) {
+        return BFIN_DOMAIN;
+    }
+
+    function totalProtocolFees() external view returns (uint256) {
+        return protocolFeeAssets;
+    }
+
