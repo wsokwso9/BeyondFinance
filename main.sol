@@ -364,3 +364,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
         emit VaultStrategyHintSet(vaultId, strategyHint, block.number);
     }
 
+    // -------------------------------------------------------------------------
+    // INTERNAL FEE ACCRUAL
+    // -------------------------------------------------------------------------
+
+    function _accrueVaultFees(uint256 vaultId) internal {
+        Vault storage v = vaults[vaultId];
+        if (v.managementFeeBps == 0 || v.totalAssets == 0 || v.totalShares == 0) {
+            v.lastAccrualBlock = block.number;
+            return;
+        }
+        uint256 elapsed = block.number - v.lastAccrualBlock;
+        if (elapsed == 0) return;
+        uint256 annualBlocks = 15_768_000;
+        uint256 feeAssets = (v.totalAssets * v.managementFeeBps * elapsed) / (BFIN_BPS_BASE * annualBlocks);
+        if (feeAssets == 0 || feeAssets > v.totalAssets) {
+            v.lastAccrualBlock = block.number;
+            return;
+        }
+        v.totalAssets -= feeAssets;
+        protocolFeeAssets += feeAssets;
+        v.lastAccrualBlock = block.number;
+    }
+
+    function _convertToShares(uint256 vaultId, uint256 assets) internal view returns (uint256) {
+        Vault storage v = vaults[vaultId];
+        if (v.totalShares == 0 || v.totalAssets == 0) {
+            return assets;
+        }
+        return (assets * v.totalShares) / v.totalAssets;
+    }
+
+    function _convertToAssets(uint256 vaultId, uint256 shares) internal view returns (uint256) {
+        Vault storage v = vaults[vaultId];
+        if (v.totalShares == 0 || v.totalAssets == 0) {
+            return shares;
+        }
+        return (shares * v.totalAssets) / v.totalShares;
+    }
+
+    // -------------------------------------------------------------------------
+    // USER OPERATIONS — VAULTS
+    // -------------------------------------------------------------------------
+
+    function deposit(uint256 vaultId, uint256 assets)
+        external
+        nonReentrant
+        whenNotPaused
+        validVault(vaultId)
+    {
+        if (assets == 0) revert BFIN_ZeroAmount();
+        Vault storage v = vaults[vaultId];
+        if (!v.enabled) revert BFIN_VaultDisabled();
+
+        _accrueVaultFees(vaultId);
+
+        IERC20BF token = IERC20BF(v.asset);
+        uint256 beforeBal = token.balanceOf(address(this));
+        bool ok = token.transferFrom(msg.sender, address(this), assets);
+        if (!ok) revert BFIN_TransferFailed();
+        uint256 afterBal = token.balanceOf(address(this));
+        uint256 received = afterBal - beforeBal;
