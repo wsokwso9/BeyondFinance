@@ -303,3 +303,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
         address asset,
         bytes32 nameHash,
         uint256 depositCap,
+        uint256 managementFeeBps,
+        uint256 withdrawalFeeBps
+    ) external onlyOwner returns (uint256 vaultId) {
+        if (asset == address(0)) revert BFIN_ZeroAddress();
+        if (vaultCounter >= BFIN_MAX_VAULTS) revert BFIN_MaxVaults();
+        if (managementFeeBps > BFIN_MAX_MANAGEMENT_FEE_BPS) revert BFIN_InvalidFeeBps();
+        if (withdrawalFeeBps > BFIN_MAX_WITHDRAWAL_FEE_BPS) revert BFIN_InvalidFeeBps();
+
+        vaultId = ++vaultCounter;
+        Vault storage v = vaults[vaultId];
+        v.asset = asset;
+        v.nameHash = nameHash;
+        v.depositCap = depositCap;
+        v.managementFeeBps = managementFeeBps;
+        v.withdrawalFeeBps = withdrawalFeeBps;
+        v.enabled = true;
+        v.lastAccrualBlock = block.number;
+
+        _vaultIds.push(vaultId);
+
+        emit VaultOpened(
+            vaultId,
+            asset,
+            nameHash,
+            depositCap,
+            managementFeeBps,
+            withdrawalFeeBps,
+            true,
+            block.number
+        );
+    }
+
+    function setVaultConfig(
+        uint256 vaultId,
+        uint256 depositCap,
+        uint256 managementFeeBps,
+        uint256 withdrawalFeeBps,
+        bool enabled
+    ) external onlyOwner validVault(vaultId) {
+        if (managementFeeBps > BFIN_MAX_MANAGEMENT_FEE_BPS) revert BFIN_InvalidFeeBps();
+        if (withdrawalFeeBps > BFIN_MAX_WITHDRAWAL_FEE_BPS) revert BFIN_InvalidFeeBps();
+        Vault storage v = vaults[vaultId];
+        v.depositCap = depositCap;
+        v.managementFeeBps = managementFeeBps;
+        v.withdrawalFeeBps = withdrawalFeeBps;
+        v.enabled = enabled;
+        emit VaultConfigUpdated(
+            vaultId,
+            depositCap,
+            managementFeeBps,
+            withdrawalFeeBps,
+            enabled,
+            block.number
+        );
+    }
+
+    function setVaultStrategyHint(uint256 vaultId, bytes32 strategyHint) external onlyOwner validVault(vaultId) {
+        vaults[vaultId].strategyHint = strategyHint;
+        emit VaultStrategyHintSet(vaultId, strategyHint, block.number);
+    }
+
