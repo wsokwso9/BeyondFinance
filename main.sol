@@ -547,3 +547,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
         if (elapsed == 0) return;
         uint256 annualBlocks = 15_768_000;
         uint256 interest = (cl.borrowed * cl.rateBps * elapsed) / (BFIN_BPS_BASE * annualBlocks);
+        if (interest == 0) {
+            cl.lastAccrualBlock = block.number;
+            return;
+        }
+        cl.borrowed += interest;
+        protocolFeeAssets += interest;
+        cl.lastAccrualBlock = block.number;
+    }
+
+    function draw(uint256 lineId, uint256 assets)
+        external
+        nonReentrant
+        whenNotPaused
+        validLine(lineId)
+    {
+        if (assets == 0) revert BFIN_ZeroAmount();
+        CreditLine storage cl = creditLines[lineId];
+        if (cl.frozen) revert BFIN_LineFrozen();
+        if (msg.sender != cl.borrower) revert BFIN_NotBorrower();
+
+        _accrueLineInterest(lineId);
+
+        if (cl.borrowed + assets > cl.limit) revert BFIN_LimitExceeded();
+        cl.borrowed += assets;
+
+        IERC20BF token = IERC20BF(cl.asset);
+        bool ok = token.transfer(msg.sender, assets);
+        if (!ok) revert BFIN_TransferFailed();
+
+        emit CreditDrawn(lineId, msg.sender, assets, block.number);
+    }
+
+    function repay(uint256 lineId, uint256 assets)
+        external
+        nonReentrant
+        whenNotPaused
+        validLine(lineId)
+    {
+        if (assets == 0) revert BFIN_ZeroAmount();
+        CreditLine storage cl = creditLines[lineId];
+
+        _accrueLineInterest(lineId);
+
+        uint256 owed = cl.borrowed;
+        if (owed == 0) revert BFIN_ZeroAmount();
+
+        IERC20BF token = IERC20BF(cl.asset);
+        uint256 beforeBal = token.balanceOf(address(this));
+        bool ok = token.transferFrom(msg.sender, address(this), assets);
+        if (!ok) revert BFIN_TransferFailed();
+        uint256 afterBal = token.balanceOf(address(this));
+        uint256 received = afterBal - beforeBal;
+        if (received == 0) revert BFIN_ZeroAmount();
+
+        uint256 payPrincipal = received > owed ? owed : received;
+        cl.borrowed = owed - payPrincipal;
+
+        emit CreditRepaid(lineId, msg.sender, payPrincipal, 0, block.number);
+    }
+
+    // -------------------------------------------------------------------------
