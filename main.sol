@@ -791,3 +791,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
         return protocolFeeAssets;
     }
 
+    function vaultCount() external view returns (uint256) {
+        return vaultCounter;
+    }
+
+    function lineCount() external view returns (uint256) {
+        return lineCounter;
+    }
+
+    function getVaultViewRange(uint256 fromIndex, uint256 toIndex) external view returns (VaultView[] memory out) {
+        uint256 len = _vaultIds.length;
+        if (fromIndex >= len || toIndex <= fromIndex) {
+            return new VaultView[](0);
+        }
+        if (toIndex > len) toIndex = len;
+        uint256 n = toIndex - fromIndex;
+        out = new VaultView[](n);
+        for (uint256 i = 0; i < n; i++) {
+            uint256 vid = _vaultIds[fromIndex + i];
+            Vault storage src = vaults[vid];
+            out[i] = VaultView({
+                vaultId: vid,
+                asset: src.asset,
+                totalAssets: src.totalAssets,
+                totalShares: src.totalShares,
+                depositCap: src.depositCap,
+                managementFeeBps: src.managementFeeBps,
+                withdrawalFeeBps: src.withdrawalFeeBps,
+                lastAccrualBlock: src.lastAccrualBlock,
+                enabled: src.enabled,
+                nameHash: src.nameHash,
+                strategyHint: src.strategyHint
+            });
+        }
+    }
+
+    function getLineViewRange(uint256 fromIndex, uint256 toIndex) external view returns (CreditLineView[] memory out) {
+        uint256 len = _lineIds.length;
+        if (fromIndex >= len || toIndex <= fromIndex) {
+            return new CreditLineView[](0);
+        }
+        if (toIndex > len) toIndex = len;
+        uint256 n = toIndex - fromIndex;
+        out = new CreditLineView[](n);
+        for (uint256 i = 0; i < n; i++) {
+            uint256 lid = _lineIds[fromIndex + i];
+            CreditLine storage src = creditLines[lid];
+            out[i] = CreditLineView({
+                lineId: lid,
+                borrower: src.borrower,
+                asset: src.asset,
+                limit: src.limit,
+                rateBps: src.rateBps,
+                borrowed: src.borrowed,
+                lastAccrualBlock: src.lastAccrualBlock,
+                frozen: src.frozen
+            });
+        }
+    }
+
+    receive() external payable {}
+}
