@@ -669,3 +669,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
         v.borrower = src.borrower;
         v.asset = src.asset;
         v.limit = src.limit;
+        v.rateBps = src.rateBps;
+        v.borrowed = src.borrowed;
+        v.lastAccrualBlock = src.lastAccrualBlock;
+        v.frozen = src.frozen;
+    }
+
+    function getLineViews(uint256 offset, uint256 limit) external view returns (CreditLineView[] memory out) {
+        uint256 len = _lineIds.length;
+        if (offset >= len) {
+            return new CreditLineView[](0);
+        }
+        uint256 end = offset + limit;
+        if (end > len) end = len;
+        uint256 n = end - offset;
+        out = new CreditLineView[](n);
+        for (uint256 i = 0; i < n; i++) {
+            uint256 lid = _lineIds[offset + i];
+            CreditLine storage src = creditLines[lid];
+            out[i] = CreditLineView({
+                lineId: lid,
+                borrower: src.borrower,
+                asset: src.asset,
+                limit: src.limit,
+                rateBps: src.rateBps,
+                borrowed: src.borrowed,
+                lastAccrualBlock: src.lastAccrualBlock,
+                frozen: src.frozen
+            });
+        }
+    }
+
+    function getVaultIds() external view returns (uint256[] memory) {
+        return _vaultIds;
+    }
+
+    function getLineIds() external view returns (uint256[] memory) {
+        return _lineIds;
+    }
+
+    function getVaultShareBalance(uint256 vaultId, address user)
+        external
+        view
+        validVault(vaultId)
+        returns (uint256)
+    {
+        return vaultShares[vaultId][user];
+    }
+
+    function getVaultAsset(uint256 vaultId) external view validVault(vaultId) returns (address) {
+        return vaults[vaultId].asset;
+    }
+
+    function getVaultTotals(uint256 vaultId)
+        external
+        view
+        validVault(vaultId)
+        returns (uint256 totalAssets_, uint256 totalShares_)
+    {
+        Vault storage v = vaults[vaultId];
+        return (v.totalAssets, v.totalShares);
+    }
