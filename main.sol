@@ -486,3 +486,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
         validVault(vaultId)
     {
         if (gainAssets == 0) revert BFIN_ZeroAmount();
+        Vault storage v = vaults[vaultId];
+        uint256 protocolCut = (gainAssets * protocolFeeBps) / BFIN_BPS_BASE;
+        uint256 netGain = gainAssets - protocolCut;
+        v.totalAssets += netGain;
+        protocolFeeAssets += protocolCut;
+        emit VaultHarvested(vaultId, gainAssets, protocolCut, block.number);
+    }
+
+    // -------------------------------------------------------------------------
+    // CREDIT LINES
+    // -------------------------------------------------------------------------
+
+    function openCreditLine(
+        address borrower,
+        address asset,
+        uint256 limit,
+        uint256 rateBps
+    ) external onlyRiskCouncil returns (uint256 lineId) {
+        if (borrower == address(0) || asset == address(0)) revert BFIN_ZeroAddress();
+        if (limit == 0) revert BFIN_ZeroAmount();
+        if (rateBps == 0 || rateBps > BFIN_MAX_RATE_BPS) revert BFIN_InvalidRate();
+        if (lineCounter >= BFIN_MAX_LINES) revert BFIN_MaxCreditLines();
+
+        lineId = ++lineCounter;
+        CreditLine storage cl = creditLines[lineId];
+        cl.borrower = borrower;
+        cl.asset = asset;
+        cl.limit = limit;
+        cl.rateBps = rateBps;
+        cl.borrowed = 0;
+        cl.lastAccrualBlock = block.number;
+        cl.frozen = false;
+        _lineIds.push(lineId);
+
+        emit CreditLineOpened(lineId, borrower, asset, limit, rateBps, block.number);
+    }
+
+    function setCreditLine(
+        uint256 lineId,
+        uint256 limit,
+        uint256 rateBps,
+        bool frozen
+    ) external onlyRiskCouncil validLine(lineId) {
+        if (rateBps == 0 || rateBps > BFIN_MAX_RATE_BPS) revert BFIN_InvalidRate();
+        CreditLine storage cl = creditLines[lineId];
+        cl.limit = limit;
+        cl.rateBps = rateBps;
+        cl.frozen = frozen;
+        emit CreditLineUpdated(lineId, limit, rateBps, frozen, block.number);
+    }
+
+    function _accrueLineInterest(uint256 lineId) internal {
+        CreditLine storage cl = creditLines[lineId];
+        if (cl.borrowed == 0 || cl.rateBps == 0) {
+            cl.lastAccrualBlock = block.number;
+            return;
+        }
+        uint256 elapsed = block.number - cl.lastAccrualBlock;
+        if (elapsed == 0) return;
+        uint256 annualBlocks = 15_768_000;
+        uint256 interest = (cl.borrowed * cl.rateBps * elapsed) / (BFIN_BPS_BASE * annualBlocks);
