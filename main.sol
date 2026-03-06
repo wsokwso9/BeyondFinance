@@ -608,3 +608,64 @@ contract BeyondFinance is ReentrancyGuard, Pausable, Ownable {
     }
 
     // -------------------------------------------------------------------------
+    // USER TAGS
+    // -------------------------------------------------------------------------
+
+    function setUserTags(bytes32 tagsHash) external {
+        userTagsHash[msg.sender] = tagsHash;
+        emit UserTagsSet(msg.sender, tagsHash, block.number);
+    }
+
+    // -------------------------------------------------------------------------
+    // VIEW HELPERS
+    // -------------------------------------------------------------------------
+
+    function getVaultView(uint256 vaultId) external view validVault(vaultId) returns (VaultView memory v) {
+        Vault storage src = vaults[vaultId];
+        v.vaultId = vaultId;
+        v.asset = src.asset;
+        v.totalAssets = src.totalAssets;
+        v.totalShares = src.totalShares;
+        v.depositCap = src.depositCap;
+        v.managementFeeBps = src.managementFeeBps;
+        v.withdrawalFeeBps = src.withdrawalFeeBps;
+        v.lastAccrualBlock = src.lastAccrualBlock;
+        v.enabled = src.enabled;
+        v.nameHash = src.nameHash;
+        v.strategyHint = src.strategyHint;
+    }
+
+    function getVaultViews(uint256 offset, uint256 limit) external view returns (VaultView[] memory out) {
+        uint256 len = _vaultIds.length;
+        if (offset >= len) {
+            return new VaultView[](0);
+        }
+        uint256 end = offset + limit;
+        if (end > len) end = len;
+        uint256 n = end - offset;
+        out = new VaultView[](n);
+        for (uint256 i = 0; i < n; i++) {
+            uint256 vid = _vaultIds[offset + i];
+            Vault storage src = vaults[vid];
+            out[i] = VaultView({
+                vaultId: vid,
+                asset: src.asset,
+                totalAssets: src.totalAssets,
+                totalShares: src.totalShares,
+                depositCap: src.depositCap,
+                managementFeeBps: src.managementFeeBps,
+                withdrawalFeeBps: src.withdrawalFeeBps,
+                lastAccrualBlock: src.lastAccrualBlock,
+                enabled: src.enabled,
+                nameHash: src.nameHash,
+                strategyHint: src.strategyHint
+            });
+        }
+    }
+
+    function getLineView(uint256 lineId) external view validLine(lineId) returns (CreditLineView memory v) {
+        CreditLine storage src = creditLines[lineId];
+        v.lineId = lineId;
+        v.borrower = src.borrower;
+        v.asset = src.asset;
+        v.limit = src.limit;
